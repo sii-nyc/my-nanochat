@@ -6,7 +6,7 @@ import os
 import time
 import argparse
 import torch
-from nanochat.tokenizer import RustBPETokenizer
+from nanochat.tokenizer import RustBPETokenizer, get_tokenizer_paths
 from nanochat.common import get_base_dir
 from nanochat.dataset import parquets_iter_batched
 
@@ -17,13 +17,23 @@ parser = argparse.ArgumentParser(description='Train a BPE tokenizer')
 parser.add_argument('--max-chars', type=int, default=2_000_000_000, help='Maximum characters to train on (default: 2B)')
 parser.add_argument('--doc-cap', type=int, default=10_000, help='Maximum characters per document (default: 10,000)')
 parser.add_argument('--vocab-size', type=int, default=32768, help='Vocabulary size (default: 32768 = 2^15)')
+parser.add_argument('--tokenizer-file', default='tokenizer.pkl', help='Output filename in the tokenizer directory; .pkl is appended if omitted (default: tokenizer.pkl); custom files get a matching <stem>.token_bytes.pt cache')
 args = parser.parse_args()
+base_dir = get_base_dir()
+tokenizer_dir = os.path.join(base_dir, "tokenizer")
+try:
+    tokenizer_path, token_bytes_path = get_tokenizer_paths(tokenizer_dir, args.tokenizer_file)
+except ValueError as e:
+    parser.error(str(e))
 print(f"max_chars: {args.max_chars:,}")
 print(f"doc_cap: {args.doc_cap:,}")
 print(f"vocab_size: {args.vocab_size:,}")
+print(f"tokenizer_path: {tokenizer_path}")
 
 # -----------------------------------------------------------------------------
 # Text iterator
+
+nchars = 0
 
 def text_iterator():
     """
@@ -31,6 +41,7 @@ def text_iterator():
     2) Crop every document to args.doc_cap characters
     3) Break when we've seen args.max_chars characters
     """
+    global nchars
     nchars = 0
     for batch in parquets_iter_batched(split="train"):
         for doc in batch:
@@ -49,13 +60,12 @@ t0 = time.time()
 tokenizer = RustBPETokenizer.train_from_iterator(text_iter, args.vocab_size)
 t1 = time.time()
 train_time = t1 - t0
+print(f"actual_chars: {nchars:,}")
 print(f"Training time: {train_time:.2f}s")
 
 # -----------------------------------------------------------------------------
 # Save the tokenizer to disk
-base_dir = get_base_dir()
-tokenizer_dir = os.path.join(base_dir, "tokenizer")
-tokenizer.save(tokenizer_dir)
+tokenizer.save(tokenizer_dir, filename=args.tokenizer_file)
 
 # -----------------------------------------------------------------------------
 # Quick inline sanity check
@@ -85,7 +95,6 @@ for token_id in range(vocab_size):
         num_bytes = len(tokenizer.decode_single_token_bytes(token_id))
         token_bytes.append(num_bytes)
 token_bytes = torch.tensor(token_bytes, dtype=torch.int32, device='cpu')
-token_bytes_path = os.path.join(tokenizer_dir, "token_bytes.pt")
 with open(token_bytes_path, "wb") as f:
     torch.save(token_bytes, f)
 print(f"Saved token_bytes to {token_bytes_path}")

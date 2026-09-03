@@ -31,6 +31,15 @@ import pickle
 import rustbpe
 import tiktoken
 
+def get_tokenizer_paths(tokenizer_dir, filename="tokenizer.pkl"):
+    """Resolve a tokenizer and its byte-count cache, appending .pkl when omitted."""
+    if not filename or filename in (".", "..", ".pkl") or any(c in filename for c in ("/", "\\", "\0")):
+        raise ValueError("Tokenizer filename must have a non-empty name and contain no directory components")
+    if not filename.endswith(".pkl"):
+        filename += ".pkl"
+    token_bytes_filename = "token_bytes.pt" if filename == "tokenizer.pkl" else f"{filename[:-4]}.token_bytes.pt"
+    return os.path.join(tokenizer_dir, filename), os.path.join(tokenizer_dir, token_bytes_filename)
+
 class RustBPETokenizer:
     """Light wrapper around tiktoken (for efficient inference) but train with rustbpe"""
 
@@ -61,8 +70,8 @@ class RustBPETokenizer:
         return cls(enc, "<|bos|>")
 
     @classmethod
-    def from_directory(cls, tokenizer_dir):
-        pickle_path = os.path.join(tokenizer_dir, "tokenizer.pkl")
+    def from_directory(cls, tokenizer_dir, filename="tokenizer.pkl"):
+        pickle_path, _ = get_tokenizer_paths(tokenizer_dir, filename)
         with open(pickle_path, "rb") as f:
             enc = pickle.load(f)
         return cls(enc, "<|bos|>")
@@ -129,10 +138,10 @@ class RustBPETokenizer:
     def decode_single_token_bytes(self, token_id):
         return self.enc.decode_single_token_bytes(token_id)
 
-    def save(self, tokenizer_dir):
+    def save(self, tokenizer_dir, filename="tokenizer.pkl"):
         # save the encoding object to disk
+        pickle_path, _ = get_tokenizer_paths(tokenizer_dir, filename)
         os.makedirs(tokenizer_dir, exist_ok=True)
-        pickle_path = os.path.join(tokenizer_dir, "tokenizer.pkl")
         with open(pickle_path, "wb") as f:
             pickle.dump(self.enc, f)
         print(f"Saved tokenizer encoding to {pickle_path}")
@@ -261,18 +270,18 @@ class RustBPETokenizer:
 # -----------------------------------------------------------------------------
 # nanochat-specific convenience functions
 
-def get_tokenizer():
+def get_tokenizer(filename="tokenizer.pkl"):
     from nanochat.common import get_base_dir
     base_dir = get_base_dir()
     tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    return RustBPETokenizer.from_directory(tokenizer_dir)
+    return RustBPETokenizer.from_directory(tokenizer_dir, filename=filename)
 
-def get_token_bytes(device="cpu"):
+def get_token_bytes(device="cpu", filename="tokenizer.pkl"):
     import torch
     from nanochat.common import get_base_dir
     base_dir = get_base_dir()
     tokenizer_dir = os.path.join(base_dir, "tokenizer")
-    token_bytes_path = os.path.join(tokenizer_dir, "token_bytes.pt")
+    _, token_bytes_path = get_tokenizer_paths(tokenizer_dir, filename)
     assert os.path.exists(token_bytes_path), f"Token bytes not found at {token_bytes_path}? It gets written by tok_train.py"
     with open(token_bytes_path, "rb") as f:
         token_bytes = torch.load(f, map_location=device)

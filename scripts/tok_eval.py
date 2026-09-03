@@ -1,9 +1,43 @@
-"""
-Evaluate compression ratio of the tokenizer.
-"""
+"""Compare tokenizer BPT and example segmentations, optionally saving Markdown."""
 
-from nanochat.tokenizer import get_tokenizer, RustBPETokenizer
+import argparse
+import json
+import re
+from pathlib import Path
+
+from nanochat.common import get_base_dir
+from nanochat.tokenizer import get_tokenizer, get_tokenizer_paths, RustBPETokenizer
 from nanochat.dataset import parquets_iter_batched
+
+parser = argparse.ArgumentParser(description='Compare tokenizer BPT and example segmentations')
+parser.add_argument('--tokenizer-file', help='Evaluate one filename in the tokenizer directory (.pkl is optional); if omitted, discover all .pkl files. GPT-2 and GPT-4 baselines are always included.')
+parser.add_argument('--output', type=Path, help='Also save the report to this Markdown file (.md is appended if omitted). Relative paths use the current directory; parent directories are created. Defaults to stdout only.')
+args = parser.parse_args()
+output_path = args.output
+if output_path is not None:
+    output_path = output_path.expanduser()
+    if not output_path.name or output_path.name == '..' or output_path.is_dir():
+        parser.error('--output must name a Markdown file, not a directory')
+    if output_path.suffix.lower() != '.md':
+        output_path = output_path.with_name(output_path.name + '.md')
+tokenizer_dir = Path(get_base_dir()) / "tokenizer"
+if args.tokenizer_file is not None:
+    try:
+        tokenizer_path, _ = get_tokenizer_paths(tokenizer_dir, args.tokenizer_file)
+    except ValueError as e:
+        parser.error(str(e))
+    tokenizer_files = [Path(tokenizer_path).name]
+else:
+    tokenizer_files = sorted(path.name for path in tokenizer_dir.glob("*.pkl") if path.is_file())
+    if not tokenizer_files:
+        parser.error(f"No tokenizer .pkl files found in {tokenizer_dir}. Train one with python -m scripts.tok_train first.")
+
+local_tokenizers = {}
+for filename in tokenizer_files:
+    try:
+        local_tokenizers[filename] = get_tokenizer(filename=filename)
+    except Exception as e:
+        parser.error(f"Could not load tokenizer {tokenizer_dir / filename}: {e}")
 
 # Random text I got from a random website this morning
 news_text = r"""
@@ -143,7 +177,7 @@ science_text = r"""
 Photosynthesis is a photochemical energy transduction process in which light-harvesting pigment–protein complexes within the thylakoid membranes of oxygenic phototrophs absorb photons and initiate charge separation at the reaction center, driving the linear electron transport chain from water to NADP⁺ via photosystem II, the cytochrome b₆f complex, and photosystem I, concomitantly generating a trans-thylakoid proton motive force utilized by chloroplastic ATP synthase. The light-dependent reactions produce ATP and NADPH, which fuel the Calvin–Benson–Bassham cycle in the stroma, wherein ribulose-1,5-bisphosphate is carboxylated by ribulose-1,5-bisphosphate carboxylase/oxygenase (RuBisCO) to form 3-phosphoglycerate, subsequently reduced and regenerated through a series of enzymatic steps, enabling net assimilation of CO₂ into triose phosphates and ultimately carbohydrates. This process is tightly regulated by photoprotective mechanisms, redox feedback, and metabolite flux, representing a central biochemical pathway coupling solar energy capture to the biosphere’s primary productivity.
 """.strip()
 
-# The tokenizer was trained on data from earlier shards, so it has seen this data
+# These labels use the current directory split, not a record of training inputs.
 train_docs = next(parquets_iter_batched(split="train"))
 train_text = "\n".join(train_docs)
 val_docs = next(parquets_iter_batched(split="val"))
@@ -160,84 +194,133 @@ all_text = [
 if val_text:
     all_text.append(("climbmix-val", val_text))
 
-# Try out current default compared to GPT-2 and GPT-4 tokenizers
+# One shared probe for inspecting boundaries, whitespace, numbers and byte pieces.
+# The second spelling of cafe\u0301 uses a combining accent intentionally.
+qualitative_text = (
+    "Hello, tokenizer! 今天用 Python 处理文本：你好，世界🙂。\n"
+    "한국어도 테스트합니다. café ≠ cafe\u0301; 2026-09-03, 3.14159.\n"
+    'def parseHTTPResponse(user_id=42):\n'
+    '    return f"user_{user_id}"  # 保留空格与换行\n'
+    r"公式：x^2 + y^2 = z^2；LaTeX: \frac{a+b}{2}"
+)
+
+# Evaluate every tokenizer on the same texts, loading each baseline only once.
+tokenizers = {
+    "GPT-2": RustBPETokenizer.from_pretrained("gpt2"),
+    "GPT-4": RustBPETokenizer.from_pretrained("cl100k_base"),
+    **local_tokenizers,
+}
 tokenizer_results = {}
 vocab_sizes = {}
+qualitative_results = {}
 
-for tokenizer_name in ["gpt2", "gpt4", "ours"]:
-
-    if tokenizer_name == "gpt2":
-        tokenizer = RustBPETokenizer.from_pretrained("gpt2") # gpt-2 base model tokenizer
-    elif tokenizer_name == "gpt4":
-        tokenizer = RustBPETokenizer.from_pretrained("cl100k_base") # gpt-4 base model tokenizer
-    else:
-        tokenizer = get_tokenizer()
-
+for tokenizer_name, tokenizer in tokenizers.items():
     vocab_sizes[tokenizer_name] = tokenizer.get_vocab_size()
     tokenizer_results[tokenizer_name] = {}
 
     for name, text in all_text:
         encoded = tokenizer.encode(text)
         decoded = tokenizer.decode(encoded)
-        assert decoded == text
+        assert decoded == text, f"Round-trip failed for {tokenizer_name} on {name}"
 
         encoded_bytes = text.encode('utf-8')
-        ratio = len(encoded_bytes) / len(encoded)
         tokenizer_results[tokenizer_name][name] = {
             'bytes': len(encoded_bytes),
-            'tokens': len(encoded),
-            'ratio': ratio
+            'bpt': len(encoded_bytes) / len(encoded) if encoded else None,
         }
 
-# ANSI color codes
-GREEN = '\033[92m'
-RED = '\033[91m'
-RESET = '\033[0m'
+    ids = tokenizer.encode(qualitative_text)
+    assert tokenizer.decode(ids) == qualitative_text, f"Round-trip failed for {tokenizer_name} on the qualitative sample"
+    pieces = [tokenizer.decode_single_token_bytes(token_id) for token_id in ids]
+    assert b''.join(pieces) == qualitative_text.encode('utf-8'), f"Token bytes do not reconstruct the qualitative sample for {tokenizer_name}"
+    qualitative_results[tokenizer_name] = {'ids': ids, 'pieces': pieces}
 
-# Print vocab sizes
-print(f"\nVocab sizes:")
-print(f"GPT-2: {vocab_sizes['gpt2']}")
-print(f"GPT-4: {vocab_sizes['gpt4']}")
-print(f"Ours: {vocab_sizes['ours']}")
 
-def print_comparison(baseline_name, baseline_results, ours_results, all_text):
-    """Print comparison table between baseline tokenizer and ours."""
-    print(f"\nComparison with {baseline_name}:")
-    print("=" * 95)
-    print(f"{'Text Type':<10} {'Bytes':<8} {baseline_name:<15} {'Ours':<15} {'Relative':<12} {'Better':<10}")
-    print(f"{'':10} {'':8} {'Tokens':<7} {'Ratio':<7} {'Tokens':<7} {'Ratio':<7} {'Diff %':<12}")
-    print("-" * 95)
+def markdown_escape(text):
+    """Keep filenames literal inside both Markdown tables and headings."""
+    text = str(text).replace('\r', r'\r').replace('\n', r'\n')
+    return re.sub(r'([\\`*_\[\]|<>])', r'\\\1', text)
 
-    for name, text in all_text:
-        baseline_data = baseline_results[name]
-        ours_data = ours_results[name]
 
-        # Calculate relative difference (positive means ours is better, negative means worse)
-        # Using tokens: fewer tokens is better, so we calculate (baseline_tokens - ours_tokens) / baseline_tokens
-        relative_diff = ((baseline_data['tokens'] - ours_data['tokens']) / baseline_data['tokens']) * 100
+def format_piece(piece):
+    """Readable Unicode when complete, lossless byte notation otherwise."""
+    try:
+        return json.dumps(piece.decode('utf-8'), ensure_ascii=False)
+    except UnicodeDecodeError:
+        return repr(piece)
 
-        # Determine which has better compression (higher ratio = better)
-        if baseline_data['ratio'] > ours_data['ratio']:
-            baseline_color, ours_color = GREEN, RED
-            better = baseline_name
-            diff_color = RED
-        elif ours_data['ratio'] > baseline_data['ratio']:
-            baseline_color, ours_color = RED, GREEN
-            better = "Ours"
-            diff_color = GREEN
-        else:
-            baseline_color, ours_color = "", ""
-            better = "Tie"
-            diff_color = ""
 
-        print(f"{name:<10} {baseline_data['bytes']:<8} "
-              f"{baseline_color}{baseline_data['tokens']:<7}{RESET} "
-              f"{baseline_color}{baseline_data['ratio']:<7.2f}{RESET} "
-              f"{ours_color}{ours_data['tokens']:<7}{RESET} "
-              f"{ours_color}{ours_data['ratio']:<7.2f}{RESET} "
-              f"{diff_color}{relative_diff:+7.1f}%{RESET}     "
-              f"{better:<10}")
+def format_segmentation(ids, pieces, width=100):
+    """Wrap between tokens so every id:piece item stays intact."""
+    lines = []
+    line = ''
+    for token_id, piece in zip(ids, pieces):
+        item = f'{token_id}:{format_piece(piece)}'
+        if line and len(line) + len(item) + 3 > width:
+            lines.append(line)
+            line = ''
+        line += (' | ' if line else '') + item
+    if line:
+        lines.append(line)
+    return '\n'.join(lines)
 
-# Print comparisons
-print_comparison("GPT-2", tokenizer_results['gpt2'], tokenizer_results['ours'], all_text)
-print_comparison("GPT-4", tokenizer_results['gpt4'], tokenizer_results['ours'], all_text)
+
+text_names = [name for name, _ in all_text]
+headers = ['Tokenizer', 'Vocab size', *text_names]
+report_lines = [
+    '# Tokenizer evaluation',
+    '',
+    f'Local tokenizer directory: {markdown_escape(tokenizer_dir)}',
+    '',
+    '## Quantitative comparison: BPT',
+    '',
+    'BPT = UTF-8 bytes / tokens. Higher is better on the same text. Vocab size is metadata; N/A means empty text.',
+    'All tokenizers encode the same raw texts without extra BOS or chat-template tokens, with exact round-trip checks.',
+    '',
+    'The five built-in samples are news, Korean, code, math/LaTeX and science. '
+    'climbmix-train and climbmix-val each join the first row group of the current train/validation split with newlines. '
+    'These labels do not track the data actually used to train each tokenizer.',
+    '',
+    '| ' + ' | '.join(headers) + ' |',
+    '| --- | ' + ' | '.join(['---:'] * (len(headers) - 1)) + ' |',
+]
+for tokenizer_name, results in tokenizer_results.items():
+    cells = [markdown_escape(tokenizer_name), str(vocab_sizes[tokenizer_name])]
+    cells.extend(f"{results[name]['bpt']:.4f}" if results[name]['bpt'] is not None else 'N/A' for name in text_names)
+    report_lines.append('| ' + ' | '.join(cells) + ' |')
+
+report_lines.extend([
+    '',
+    '## Qualitative comparison: shared sample',
+    '',
+    'The sample covers English, Chinese, Korean, numbers, code identifiers/indentation, LaTeX, emoji and composed/combining accents.',
+    '',
+    '```text',
+    qualitative_text,
+    '```',
+    '',
+    r'Each item is token_id:piece; | separates tokens. Quoted strings preserve spaces and escape newlines as \n. '
+    r"b'\x..' notation preserves raw bytes when a token is not valid UTF-8 on its own. "
+    'Such fragments are normal; their concatenated bytes reconstruct the original text. '
+    'Token IDs are specific to each tokenizer and should not be compared across tokenizers.',
+])
+for tokenizer_name, result in qualitative_results.items():
+    report_lines.extend([
+        '',
+        f'### {markdown_escape(tokenizer_name)}',
+        '',
+        '```text',
+        format_segmentation(result['ids'], result['pieces']),
+        '```',
+    ])
+
+# The terminal and optional file receive exactly the same Markdown report.
+report = '\n'.join(report_lines) + '\n'
+print(report, end='')
+if output_path is not None:
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report, encoding='utf-8')
+    except OSError as e:
+        parser.error(f'Could not save report to {output_path}: {e}')
+    print(f'\nSaved report to {output_path.resolve()}')
