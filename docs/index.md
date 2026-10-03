@@ -11,7 +11,8 @@ docs/
 └── progress/                             # 按阶段组织的项目进展记录
     ├── README.md                         # 当前状态与里程碑索引
     └── nanochat/                         # 理解和复现 nanochat 阶段的记录
-        └── 2026-10-01-tokenizer.md       # 分词器学习与对比实验的阶段总结
+        ├── 2026-10-01-tokenizer.md       # 分词器学习与首轮对比实验的历史总结
+        └── 2026-10-04-tokenizer-experiment.md # 从头训练的分词器对比实验与结论
 ```
 
 新增或移动 `docs/` 下的文档时，同步更新本索引。
