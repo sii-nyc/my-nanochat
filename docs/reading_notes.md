@@ -35,3 +35,5 @@ python -m scripts.tok_train --max-chars=xxx --vocab-size xxx --doc-cap xxx
 3. 将所有文档转换为 UTF-8 bytes 序列，Byte-level BPE 的基础词表固定包含 256 个 token (对应 byte 0-255)
 4. 不断统计相邻 token pair 频率，并合并最高频 pair 为一个新的 token (e.g., [23, 45] -> 256)
 5. 直到词表达到目标大小（即进行 vocab-size - 256 次合并）
+
+## 推理

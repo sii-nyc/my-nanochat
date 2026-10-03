@@ -1,134 +1,104 @@
-# Tokenizer 用法与实测结果
+# Tokenizer
 
-## 训练与评估
+## 简介
 
-```bash
-python -m scripts.tok_train --max-chars=1000000000 --tokenizer-file=tok_1b_chars
-# 指定一个 tokenizer，与 GPT-2、GPT-4 比较
-python -m scripts.tok_eval --tokenizer-file=tok_1b_chars
-# 自动发现并比较目录中的所有 tokenizer，以及 GPT-2、GPT-4
-python -m scripts.tok_eval
-# 同时保存 Markdown 报告（.md 可省略）
-python -m scripts.tok_eval --output reports/tokenizer_eval
-```
+nanochat 使用 byte-level BPE（Byte Pair Encoding）将文本转换为模型处理的 token ID。这一流程分为两个阶段：训练阶段从语料中学习词表和合并规则；使用/推理阶段按照这些规则把新文本编码为 ID，并将 ID 解码回文本。
 
-| 训练参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--max-chars` | `2000000000` | 文档截断后累计的字符预算，按 Python `len(text)` 计数；**1B = 10⁹ 字符** |
-| `--doc-cap` | `10000` | 每篇文档只保留前 N 个字符 |
-| `--vocab-size` | `32768` | 最终词表大小，包含特殊 token |
-| `--tokenizer-file` | `tokenizer.pkl` | 文件名；自动补全后缀 `.pkl` |
+本项目没有从零实现 BPE 算法，而是组合了两个库：
 
-**训练**：运行 `scripts.tok_train` 后，依次执行：
+- [rustbpe](https://github.com/karpathy/rustbpe)：用 Rust 实现、提供 Python 接口，负责训练 GPT 风格的 byte-level BPE。
+- [tiktoken](https://github.com/openai/tiktoken)：在 nanochat 中负责高效编码与解码。训练完成后，nanochat 将 rustbpe 学到的预切分正则和 token 合并优先级构造成 tiktoken 的 Encoding。
 
-1. **划分数据集**：列出 `NANOCHAT_BASE_DIR` 下 `base_data_climbmix/` 中的 Parquet 文件，按文件名排序，将最后一个作为验证集，其余作为训练集。
-2. **读取训练文本**：顺序读取训练文件各 row group 的 `text` 列，每篇只取前 `doc_cap` 个字符。交出该文档后，若累计字符数 **大于** `max_chars` 就停止取样，因此最多超出一个 `doc_cap`（默认 10,000 字符）；若数据提前耗尽，则用已读取的文本训练，不报预算不足错误。
-3. **训练 tokenizer**：将文本交给 `rustbpe` 在 CPU 上训练 BPE，学习词表和合并规则，再加入特殊 token，构造用于编码、解码的 tokenizer。
-4. **保存与检查**：先保存 tokenizer，再检查样例文本能否编码后完整解码，最后生成字节数缓存。两个文件均保存在 `NANOCHAT_BASE_DIR` 下的 `tokenizer/` 目录。
+项目的衔接代码在 [nanochat/tokenizer.py](../nanochat/tokenizer.py)。
 
-以 `--tokenizer-file=tok_1b_chars` 为例：
-
-| 文件 | 内容与用途 |
-| --- | --- |
-| `tok_1b_chars.pkl` | 训练好的 tokenizer，包含词表、合并优先级、预切分正则和特殊 token 定义；加载后可直接编码、解码文本 |
-| `tok_1b_chars.token_bytes.pt` | token ID 到原始字节长度的映射张量，特殊 token 记为 0；供语言模型的 bits-per-byte（BPB）评估使用 |
-
-不指定名称时，保存为 `tokenizer.pkl` 和 `token_bytes.pt`；同名文件会被覆盖，改名不影响输入数据。
-
-注：`base_train` 等模型脚本仍默认加载 `tokenizer.pkl`；自定义名称目前只接入 tokenizer 训练与评估，不会自动切换模型训练配置。
-
-**评估**：运行 `scripts.tok_eval` 后，依次执行：
-
-1. **选择 tokenizer**：从 `NANOCHAT_BASE_DIR` 下的 `tokenizer/` 目录加载文件。指定 `--tokenizer-file` 时只选该文件（`.pkl` 可省略）；不指定时，按文件名排序加载目录顶层所有 `.pkl` 文件。两种模式都加入 `gpt2`（GPT-2）、`cl100k_base`（GPT-4）作为参照。
-2. **定量评估**：使用内置新闻、韩文、代码、数学/LaTeX、科学文本，再按**当前数据目录**的文件排序与划分规则，读取训练集和验证集各自的**第一个 row group**，分别用换行拼接其中的文档。该划分不追踪 tokenizer 的实际训练数据，需保持数据目录不变才能与训练时一致。所有 tokenizer 在这些相同文本上计算 BPT。
-3. **定性比较**：所有 tokenizer 编码下方同一段示例文本，展示每个 token 的 ID 和字节片段，观察中外文、数字、代码及空白的切分。定量、定性编码均不额外添加 BOS 或聊天模板 token，并检查 `decode(encode(text)) == text`；不一致即终止。
-4. **输出结果**：先显示一张 BPT 表，每行一个 tokenizer、每列一组测试文本，词表大小作为背景信息；随后显示示例原文和各 tokenizer 的完整分词结果。默认只打印到屏幕；指定 `--output 文件名` 时，同时保存相同内容的 UTF-8 Markdown 报告。
-
-`--output` 支持相对或绝对路径，相对路径以当前工作目录为基准；自动补全 `.md` 后缀并创建父目录，同名报告会被覆盖。可与 `--tokenizer-file` 同时使用。
-
-**定量指标**：只使用 **BPT（bytes/token）= 文本 UTF-8 字节数 / token 数**，显示四位小数；同一文本上越大，每个 token 平均承载的文本越多。它不表示磁盘压缩比，也不能单独推断模型效果；空文本记为 `N/A`。
-
-**定性示例**：这段文本只用于展示切分，不加入定量测试集合。两处 `café` 分别使用预组合字符和组合重音，外观相似但编码不同。
-
-```text
-Hello, tokenizer! 今天用 Python 处理文本：你好，世界🙂。
-한국어도 테스트합니다. café ≠ café; 2026-09-03, 3.14159.
-def parseHTTPResponse(user_id=42):
-    return f"user_{user_id}"  # 保留空格与换行
-公式：x^2 + y^2 = z^2；LaTeX: \frac{a+b}{2}
-```
-
-每项按 `ID:片段` 显示，用 `|` 分隔 token；引号内保留空格，换行显示为 `\n`。能独立解码的片段直接显示文字；不完整的 UTF-8 片段用 `b'\xe4\xbd'` 这类原始字节形式显示，拼接后仍完整还原原文。token ID 只在各自词表内有意义，跨 tokenizer 应比较切分片段。
-
-参考 tokenizer 首次可能下载词表，不运行 GPT 模型；其词表大小、语料和预切分规则不同，差异不能只归因于语料量。当前定量评估仅覆盖上述样本，尚未实现完整验证集评估和逐文档统计。
-
-## 网页查看分词
-
-在仓库根目录、已设置 `NANOCHAT_BASE_DIR` 的环境中运行：
+## 训练阶段
 
 ```bash
-python -m scripts.tok_export
-# 可选：只导出一个本地 tokenizer，或指定 HTML 路径（.html 可省略）
-python -m scripts.tok_export --tokenizer-file=tok_2b_chars --output training/tokenizer
+NANOCHAT_BASE_DIR=training python -m scripts.tok_train --max-chars=2000000000 --vocab-size=32768 --doc-cap=10000 --tokenizer-file=tokenizer.pkl
 ```
 
-默认按文件名排序读取 `NANOCHAT_BASE_DIR/tokenizer/` 顶层所有 `.pkl`，加入 GPT-2 和 GPT-4，生成 `NANOCHAT_BASE_DIR/tokenizer.html`。没有本地 tokenizer 时会明确提示，并仅导出两个 GPT 参照。首次导出可能下载 GPT 词表；不需要 GPU 或前端构建工具。
+参数说明：
 
-将生成的 HTML 下载到电脑后直接双击打开，无需服务器或联网。选择一个 tokenizer，左侧显示分词文本、右侧显示 IDs；悬停任一侧会高亮另一侧。完整 token（如 `Response`）整体高亮；一个字跨多个 token 时保留完整字形，并联动多个 ID。页面同时显示 token 数、BPT，支持复制 IDs；悬停 ID 可查看字节。输入上限为 6,000 个 UTF-16 单元。
+- **NANOCHAT_BASE_DIR=training**：数据与运行产物的根目录，是环境变量而非训练脚本参数。脚本从 training/base_data_climbmix/ 读取数据，并将结果保存到 training/tokenizer/；若不设置，默认使用 ~/.cache/nanochat/。
+- **--max-chars=2000000000**：训练文本的字符预算，按每篇截断后的 Python 字符数累计，不是 UTF-8 字节数。累计数超过预算后才停止，因此可能多读一篇文档；如果数据不足，脚本不会自动下载补齐。
+- **--vocab-size=32768**：最终词表大小，包含普通 token 和特殊 token。
+- **--doc-cap=10000**：每篇文档最多保留 10000 个字符，避免少数超长文档占据过多训练预算。
+- **--tokenizer-file=tokenizer.pkl**：保存的词表文件名，位于根目录的 tokenizer/ 子目录中。文件名可省略 .pkl 后缀；默认缓存名为 token_bytes.pt，若指定 tok_a.pkl，则缓存名为 tok_a.token_bytes.pt。使用不同名称可保留多个实验词表。
 
-网页与评估脚本都使用 `encode_ordinary`，不添加 BOS 或聊天模板，特殊 token 名称按普通文字处理。导出保留实际词表、正则和合并优先级；网页加载每个 tokenizer 时校验内置样例的 IDs 与 Python 一致，每次编码也检查字节能否还原原文。浏览器需支持 WebAssembly、Web Worker 和 `Intl.Segmenter`。
+执行效果：脚本读取预先放在 training/base_data_climbmix/ 的 Parquet 训练数据，从头训练 BPE 分词器，并进行一次编码与解码的往返检查。完成后在 training/tokenizer/ 生成 tokenizer.pkl（包含词表、预切分正则、合并优先级和特殊 token 定义）与 token_bytes.pt（每个 token 的原始字节长度，供 BPB 评测使用），同时打印实际读取的字符数和训练耗时。两个文件同名已存在时会被覆盖；整个 training/ 目录已被 Git 忽略。
 
-HTML 包含导出时的词表快照；新增或重训 tokenizer 后重新导出即可。`--output` 的相对路径以当前工作目录为基准，自动创建父目录并覆盖同名文件。
+训练的主要过程如下：
 
-## 实测结果
+1. 从预训练数据的训练分片读取文本；数据以 Parquet 文件保存，按文件名排序后，最后一个分片留作验证，其余用于训练。每篇文本先按 doc-cap 截断，再累计到 max-chars 字符预算附近。
+2. rustbpe 使用 [SPLIT_PATTERN](../nanochat/tokenizer.py) 正则对文本预切分。后续 BPE 合并只在各个预切分片段内部进行，不跨越片段边界。
+3. 将每个片段编码成 UTF-8 字节。byte-level BPE 从 256 个单字节 token（0–255）开始，因此任意 UTF-8 文本都能表示。
+4. 统计相邻 token 对的出现频率，将最高频的一对合并为新 token，然后重新统计、继续合并。例如两个单字节 token 可以合并为一个表示更长字节序列的 token。
+5. 普通 token 的数量达到目标后，另行加入 nanochat 的特殊 token（如 <|bos|>）。这里 --vocab-size 指**包含特殊 token 的最终词表大小**。当前代码定义了 9 个特殊 token，因此以 32768 为目标时，普通 token 目标为 32759；从 256 个基础 token 出发，目标合并次数为 32768 − 9 − 256 = 32503。
 
-以下汇总用户提供的服务器运行结果。训练规模按文件名及前述命令标记；本次未提供 `actual_chars`、训练耗时和数据清单，分析以训练时满足对应预算且数据保持一致为前提。
+## 推理阶段
 
-Tokenizer 目录：`/inspire/hdd/global_user/niuyuchen-253108120111/llm_playground/my-nanochat/training/tokenizer`。
+模型使用分词器时，nanochat 从已保存的文件加载 tiktoken Encoding。下面是编码、解码和查看 token 原始字节的最小示例；运行前需要先训练并保存默认词表：
 
-### 定量结果
+```python
+import os
+os.environ["NANOCHAT_BASE_DIR"] = "training"  # 与上面的训练命令使用同一目录
 
-保留原始报告的四位小数；每列独立计算 BPT，越大越好。`climbmix-train` 和 `climbmix-val` 各仅覆盖一个 row group，训练样本只作诊断；这里不对七列求平均，也不计算跨文本总分。
+from nanochat.tokenizer import get_tokenizer
 
-| Tokenizer | 词表大小 | news | korean | code | math | science | climbmix-train | climbmix-val |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| GPT-2 | 50257 | 4.5025 | 1.1987 | 2.1858 | 1.9594 | 4.2769 | 4.6709 | 4.6013 |
-| GPT-4 | 100277 | 4.7003 | 2.4533 | 4.0744 | 2.2043 | 4.4659 | 4.8213 | 4.7736 |
-| `tok_1b_chars.pkl` | 32768 | 4.4914 | 1.1612 | 3.1554 | 2.0110 | 4.5950 | 4.7378 | 4.6649 |
-| `tok_2b_chars.pkl` | 32768 | 4.4914 | 1.1923 | 3.1713 | 2.0132 | 4.5020 | 4.7371 | 4.6653 |
-| `tok_2b_vocab16k.pkl` | 16384 | 4.2106 | 1.0531 | 2.8103 | 1.7980 | 4.0290 | 4.4441 | 4.3757 |
-| `tok_2b_vocab64k.pkl` | 65536 | 4.7493 | 1.4834 | 3.4212 | 2.1501 | 5.1481 | 4.9215 | 4.8526 |
-| `tok_3b_chars.pkl` | 32768 | 4.4914 | 1.1612 | 3.1713 | 2.0132 | 4.5203 | 4.7364 | 4.6653 |
+tokenizer = get_tokenizer(filename="tokenizer.pkl")  # 加载上面命令训练的词表
+# 如果训练时使用 --tokenizer-file=tok_2b_vocab64k，也可改为：
+# tokenizer = get_tokenizer(filename="tok_2b_vocab64k")
+text = "Hello, 世界"
 
-### 简单分析
+ids = tokenizer.encode(text)  # 普通文本编码为 token ID；默认不加特殊 token
+restored = tokenizer.decode(ids)  # ID 解码回原文
+assert restored == text
 
-先看 `climbmix-val` 上两组控制变量对比。下列百分比均为 **BPT 相对变化**，由表中四位小数计算：`100 × (新 BPT / 原 BPT − 1)`。
+pieces = [tokenizer.decode_single_token_bytes(i) for i in ids]
+assert b"".join(pieces) == text.encode("utf-8")
 
-| 固定条件 | 对比 | climbmix-val BPT | BPT 相对变化 |
-| --- | --- | --- | ---: |
-| 32K 词表 | 1B → 2B 字符 | 4.6649 → 4.6653 | 约 +0.0086% |
-| 32K 词表 | 2B → 3B 字符 | 4.6653 → 4.6653 | 四位小数下相同 |
-| 2B 字符 | 16K → 32K 词表 | 4.3757 → 4.6653 | 约 +6.62% |
-| 2B 字符 | 32K → 64K 词表 | 4.6653 → 4.8526 | 约 +4.01% |
+ids_with_bos = tokenizer.encode(text, prepend="<|bos|>")
+assert ids_with_bos[0] == tokenizer.get_bos_token_id()
+```
 
-- **固定词表，增加语料量的收益很小且不一致。** 32K 下，验证样本几乎不变；news 三组完全相同，code 和 math 从 1B 到 2B 小幅提高后持平。korean 在 2B 最好，science 则在 1B 最好，因此本次结果未显示 3B 的稳定优势。四位小数相同只说明这些样本上的 BPT 接近，不表示词表或切分完全相同。
-- **固定语料，扩大词表的影响更明显。** 2B 下，七类样本均随 16K → 32K → 64K 提高；验证样本从 16K 到 64K 共提高约 **10.90%**。验证样本上第二次翻倍的相对收益减小，但这个趋势不能推广到所有类别：32K → 64K 时，korean 和 science 分别提高约 **24.41%**、**14.35%**。
-- **2B / 64K 在本地五个 tokenizer 中七项均最高。** 它也在七项上均超过 GPT-2；相对 GPT-4，在 news、science、climbmix-train、climbmix-val 四项领先，在 korean、code、math 三项落后。其验证样本 BPT 比 GPT-4 高约 **1.65%**，但参考 tokenizer 的词表大小、训练语料和规则不同，这不是相同训练条件下的对照。
+get_tokenizer 的 filename 可写完整的 .pkl 文件名，也可省略后缀；不传时默认加载 tokenizer.pkl。一个 token 的原始字节片段未必能单独解码为完整 Unicode 字符，因此查看切分时使用 decode_single_token_bytes；所有片段拼接后应还原原文。nanochat 的普通文本编码使用 tiktoken 的 encode_ordinary，只有显式指定 prepend 或 append 时才加入相应的特殊 token。
 
-这批样本支持的初步结论是：**词表大小带来的 BPT 差异，明显大于固定 32K 时 1B–3B 训练语料量带来的差异**。它尚不能说明 1B 对所有领域都已足够，也不能仅凭 BPT 判断语言模型效果或训练成本。
+## Tokenizer 对比实验
 
-### 定性观察
+### 目的与设计
 
-以下摘录上方同一示例中的实际 token 片段，保留前导空格、省略 ID。三种 32K tokenizer 在这三处的切分一致，合并展示。
+本次实验从头训练多组 tokenizer，分别考察**训练语料量**和**词表大小**对分词表现的影响，为后续训练聊天模型选择词表提供依据。重点观察相同文本需要多少 token、不同类型文本如何切分，以及训练所需时间；BPT 等分词指标不能单独代表下游模型质量。
 
-| Tokenizer | ` parseHTTPResponse` | ` café` | `LaTeX` |
-| --- | --- | --- | --- |
-| GPT-2 | `[" parse", "HT", "T", "PR", "esp", "onse"]` | `[" café"]` | `["La", "TeX"]` |
-| GPT-4 | `[" parse", "HTTP", "Response"]` | `[" café"]` | `["La", "TeX"]` |
-| 2B / 16K | `[" par", "se", "HT", "TP", "Res", "p", "onse"]` | `[" c", "af", "é"]` | `["L", "a", "Te", "X"]` |
-| 1B、2B、3B / 32K | `[" par", "se", "HT", "TP", "Resp", "onse"]` | `[" caf", "é"]` | `["La", "Te", "X"]` |
-| 2B / 64K | `[" parse", "HT", "TP", "Response"]` | `[" café"]` | `["La", "TeX"]` |
+使用同一批 ClimbMix Parquet 分片，按文件名排序后将最后一个分片留作验证集；所有实验保持相同的数据顺序、预切分规则和 `doc-cap=10000`。每次只改变下表中的一个变量：
 
-- **扩大词表确实合并了更多片段。** 表中的 `Response`、` café`、`TeX` 在 64K 下更完整；中文“用”在 2B / 16K 下切成 `b'\xe7'`、`b'\x94'`、`b'\xa8'`，32K 下为 `b'\xe7\x94'`、`b'\xa8'`，64K 下成为一个完整的 `"用"` token。不过，64K 在中韩文中仍有许多字节片段，不能据此认定这些语言的覆盖已充分。
-- **增加语料也会改变局部切分。** 1B / 32K 把 `user_id` 的后缀切成 `"_"`、`"id"`，2B 和 3B / 32K 则有完整的 `"_id"`。这说明总体 BPT 接近时，局部词表仍可能不同。
-- **部分边界由规则决定。** 五个本地 tokenizer 都把 `2026` 切成 `"20"`、`"26"`，把小数点后的 `14159` 切成 `"14"`、`"15"`、`"9"`，与当前正则最多按两位数字预切分一致；扩大词表不会取消这些预切分边界。字节片段和组合重音的独立切分也不等于编码错误，应以完整文本能否还原为准。
+| 实验词表 | 训练字符预算 | 词表大小 | 对比目的 |
+| --- | ---: | ---: | --- |
+| `tok_1b_chars` | 1B | 32K | 与 2B、3B 比较语料量 |
+| `tok_2b_chars` | 2B | 32K | 两组对比的共同基线 |
+| `tok_3b_chars` | 3B | 32K | 与 1B、2B 比较语料量 |
+| `tok_2b_vocab16k` | 2B | 16K | 与 32K、64K 比较词表大小 |
+| `tok_2b_vocab64k` | 2B | 64K | 与 16K、32K 比较词表大小 |
+
+### 实验流程
+
+1. 固定训练数据及评估文本，记录代码提交、数据分片、依赖版本和各组实际读取的字符数。所有 tokenizer 均从头训练，不复用上次实验的词表。
+2. 依次训练五个 tokenizer，分别保存词表与训练日志，记录训练耗时；检查编码后能否完整解码。
+3. 在相同的 ClimbMix 训练/验证样本，以及新闻、韩文、代码、数学/LaTeX、科学文本上计算 **BPT = UTF-8 字节数 ÷ token 数**。同一文本上 BPT 越高，表示使用的 token 越少。当前评估脚本对 ClimbMix 两组样本各只读取第一个 row group，因此这一指标是抽样结果。
+4. 比较固定样例的实际切分，并使用离线网页查看多语言、代码、数字和特殊字符的分词情况。GPT-2、GPT-4 tokenizer 作为外部参照；由于训练语料、词表和规则不同，不把它们当作控制变量实验。
+5. 分别分析增加训练语料、扩大词表的收益与训练成本，再结合定性观察选择后续模型训练使用的 tokenizer。若抽样结果不足以支持选择，再扩大验证样本。
+
+实验入口为 `runs/tokenizer_experiment.py`，在服务器准备好 ClimbMix Parquet 数据后运行：
+
+```bash
+python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
+```
+
+脚本将词表、日志和离线网页保存在 Git 忽略的 `training/tokenizer_experiments/` 中；将 Markdown 报告、精确的字节数与 token 数及 BPT、运行配置写入 `docs/experiments/tokenizer/`，默认提交并推送到当前分支的上游。运行前需要干净的 Git 工作区和已配置的上游分支。
+
+### 实验结果
+
+待本次训练与评估完成后填写。
+
+### 分析
+
+待结合定量结果、实际切分及训练成本填写。

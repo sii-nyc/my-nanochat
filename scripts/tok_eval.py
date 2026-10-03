@@ -1,6 +1,7 @@
 """Compare tokenizer BPT and example segmentations, optionally saving Markdown."""
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -12,6 +13,7 @@ from nanochat.dataset import parquets_iter_batched
 parser = argparse.ArgumentParser(description='Compare tokenizer BPT and example segmentations')
 parser.add_argument('--tokenizer-file', help='Evaluate one filename in the tokenizer directory (.pkl is optional); if omitted, discover all .pkl files. GPT-2 and GPT-4 baselines are always included.')
 parser.add_argument('--output', type=Path, help='Also save the report to this Markdown file (.md is appended if omitted). Relative paths use the current directory; parent directories are created. Defaults to stdout only.')
+parser.add_argument('--json-output', type=Path, help='Save exact byte/token counts, BPT, and sample fingerprints as JSON for later analysis.')
 args = parser.parse_args()
 output_path = args.output
 if output_path is not None:
@@ -20,6 +22,13 @@ if output_path is not None:
         parser.error('--output must name a Markdown file, not a directory')
     if output_path.suffix.lower() != '.md':
         output_path = output_path.with_name(output_path.name + '.md')
+json_output_path = args.json_output
+if json_output_path is not None:
+    json_output_path = json_output_path.expanduser()
+    if not json_output_path.name or json_output_path.name == '..' or json_output_path.is_dir():
+        parser.error('--json-output must name a JSON file, not a directory')
+    if json_output_path.suffix.lower() != '.json':
+        json_output_path = json_output_path.with_name(json_output_path.name + '.json')
 tokenizer_dir = Path(get_base_dir()) / "tokenizer"
 if args.tokenizer_file is not None:
     try:
@@ -213,6 +222,15 @@ tokenizers = {
 tokenizer_results = {}
 vocab_sizes = {}
 qualitative_results = {}
+sample_info = {
+    name: {
+        'utf8_bytes': len(text.encode('utf-8')),
+        'sha256_utf8': hashlib.sha256(text.encode('utf-8')).hexdigest(),
+        'documents': len(train_docs) if name == 'climbmix-train' else len(val_docs) if name == 'climbmix-val' else None,
+        'row_group': 0 if name.startswith('climbmix-') else None,
+    }
+    for name, text in all_text
+}
 
 for tokenizer_name, tokenizer in tokenizers.items():
     vocab_sizes[tokenizer_name] = tokenizer.get_vocab_size()
@@ -226,6 +244,7 @@ for tokenizer_name, tokenizer in tokenizers.items():
         encoded_bytes = text.encode('utf-8')
         tokenizer_results[tokenizer_name][name] = {
             'bytes': len(encoded_bytes),
+            'tokens': len(encoded),
             'bpt': len(encoded_bytes) / len(encoded) if encoded else None,
         }
 
@@ -324,3 +343,18 @@ if output_path is not None:
     except OSError as e:
         parser.error(f'Could not save report to {output_path}: {e}')
     print(f'\nSaved report to {output_path.resolve()}')
+if json_output_path is not None:
+    metrics = {
+        'metric': 'BPT = UTF-8 bytes / ordinary tokens; no BOS or chat template',
+        'samples': sample_info,
+        'tokenizers': {
+            name: {'vocab_size': vocab_sizes[name], 'samples': tokenizer_results[name]}
+            for name in tokenizers
+        },
+    }
+    try:
+        json_output_path.parent.mkdir(parents=True, exist_ok=True)
+        json_output_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    except OSError as e:
+        parser.error(f'Could not save JSON metrics to {json_output_path}: {e}')
+    print(f'Saved JSON metrics to {json_output_path.resolve()}')

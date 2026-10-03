@@ -12,4 +12,5 @@ eval_bundle/
 CLAUDE.md
 wandb/
 .sii/
+# Server-only datasets, checkpoints, tokenizer experiment artifacts and HTML
 training/

@@ -1,6 +1,7 @@
 """Exercise tokenizer experiment files through the training and evaluation CLIs."""
 
 import ast
+import json
 import runpy
 import sys
 
@@ -120,6 +121,18 @@ def test_train_and_eval_named_tokenizer(filename, tmp_path, monkeypatch, capsys)
         assert report_path.read_text(encoding="utf-8") == results["report"]
         assert output == results["report"] + f"\nSaved report to {report_path}\n"
         assert not (tmp_path / "reports" / "分词对比.md.md").exists()
+
+    # Preserve exact counts and sample identity for later comparisons.
+    metrics_path = tmp_path / "reports" / "metrics.json"
+    monkeypatch.setattr(sys, "argv", ["tok_eval", "--json-output=reports/metrics"])
+    runpy.run_module("scripts.tok_eval", run_name="__main__")
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    val = metrics["tokenizers"]["experiment.v1.pkl"]["samples"]["climbmix-val"]
+    assert val["tokens"] > 0
+    assert val["bytes"] == metrics["samples"]["climbmix-val"]["utf8_bytes"]
+    assert val["bpt"] == val["bytes"] / val["tokens"]
+    assert metrics["samples"]["climbmix-val"]["documents"] == 2
+    assert len(metrics["samples"]["climbmix-val"]["sha256_utf8"]) == 64
 
     # A bad save target reports an error while keeping the screen report available.
     (tmp_path / "blocked").write_text("not a directory")
