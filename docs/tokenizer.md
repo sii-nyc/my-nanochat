@@ -95,6 +95,8 @@ python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
 
 脚本将词表、日志和离线网页保存在 Git 忽略的 `training/tokenizer_experiments/` 中；将 Markdown 报告、精确的字节数与 token 数及 BPT、运行配置写入 `docs/experiments/tokenizer/`，默认提交并推送到当前分支的上游。运行前需要干净的 Git 工作区和已配置的上游分支。
 
+如果希望本次运行的**全部产物只保存在服务器的 `training/` 下**，在命令末尾加 `--no-upload`。此时报告留在 `training/tokenizer_experiments/<run-id>/public/`，脚本不会在 `docs/` 创建副本，也不会提交或推送结果。
+
 ### 实验结果
 
 待本次训练与评估完成后填写。

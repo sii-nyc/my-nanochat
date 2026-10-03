@@ -5,7 +5,8 @@ Run from a clean Git checkout with the project environment installed:
     python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
 
 The five tokenizer files and the offline HTML stay under the ignored training/
-directory. Small reports are committed and pushed to the current upstream branch.
+directory. By default, small reports are committed and pushed to the current
+upstream branch. With --no-upload, the reports also stay under training/.
 """
 
 import argparse
@@ -243,10 +244,10 @@ def main():
     )
     parser.add_argument(
         "--results-dir", type=Path,
-        help="Repository directory for this run's GitHub reports (default: docs/experiments/tokenizer/RUN_ID)",
+        help="Repository directory for uploaded reports (default: docs/experiments/tokenizer/RUN_ID; unavailable with --no-upload)",
     )
     parser.add_argument("--run-id", help="Unique run name; default: UTC timestamp plus code commit")
-    parser.add_argument("--no-upload", action="store_true", help="Leave finished reports uncommitted and unpushed")
+    parser.add_argument("--no-upload", action="store_true", help="Keep reports with the other artifacts under the artifact root; do not commit or push")
     parser.add_argument("--plan", action="store_true", help="Show paths and commands without writing anything")
     args = parser.parse_args()
 
@@ -269,19 +270,24 @@ def main():
         parser.error("--run-id must use 1-80 letters, digits, underscores or hyphens")
     artifact_root = (REPO / args.artifact_root).expanduser().resolve()
     work_dir = artifact_root / run_id
-    results_dir = (
-        (REPO / args.results_dir).expanduser().resolve()
-        if args.results_dir else REPO / "docs" / "experiments" / "tokenizer" / run_id
-    )
-    if not inside(results_dir, REPO) or inside(results_dir, REPO / ".git"):
-        parser.error("--results-dir must be inside the repository and outside .git")
-    if inside(results_dir, artifact_root) or inside(work_dir, results_dir):
-        parser.error("Results and server-only artifacts must use separate directories")
-    if git_ignored(results_dir):
-        parser.error(f"Results directory is Git-ignored: {results_dir}")
+    if args.no_upload:
+        if args.results_dir:
+            parser.error("--results-dir requires upload; --no-upload keeps reports in the artifact run directory")
+        results_dir = work_dir / "public"
+    else:
+        results_dir = (
+            (REPO / args.results_dir).expanduser().resolve()
+            if args.results_dir else REPO / "docs" / "experiments" / "tokenizer" / run_id
+        )
+        if not inside(results_dir, REPO) or inside(results_dir, REPO / ".git"):
+            parser.error("--results-dir must be inside the repository and outside .git")
+        if inside(results_dir, artifact_root) or inside(work_dir, results_dir):
+            parser.error("Results and server-only artifacts must use separate directories")
+        if git_ignored(results_dir):
+            parser.error(f"Results directory is Git-ignored: {results_dir}")
     if inside(artifact_root, REPO) and not git_ignored(work_dir):
         parser.error(f"Artifact directory must be Git-ignored: {work_dir}")
-    if work_dir.exists() or results_dir.exists():
+    if work_dir.exists() or (not args.no_upload and results_dir.exists()):
         parser.error("Run directory already exists; choose a new --run-id or --results-dir")
 
     plan = {
@@ -450,12 +456,13 @@ def main():
         "offline_html_bytes": html_path.stat().st_size,
     }
     write_results(public_dir, metadata, work_dir)
-    shutil.copytree(public_dir, results_dir)
-    print(f"Reports ready: {results_dir}")
     print(f"Server-only tokenizers and HTML: {base_dir}")
     if args.no_upload:
-        print("Upload skipped; reports are uncommitted in the repository.")
+        print(f"Reports ready: {public_dir}")
+        print("Upload skipped; all outputs remain in the ignored artifact run directory.")
         return
+    shutil.copytree(public_dir, results_dir)
+    print(f"Reports ready: {results_dir}")
     relative_results = str(results_dir.relative_to(REPO))
     git("add", "--", relative_results)
     git("commit", "-m", f"Record tokenizer comparison {run_id}")
