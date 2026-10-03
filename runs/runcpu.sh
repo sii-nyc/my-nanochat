@@ -11,7 +11,8 @@
 # You may also want to run this script manually and one by one, copy pasting commands into your terminal.
 
 # all the setup stuff
-export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$REPO_ROOT/training}"
 mkdir -p "$NANOCHAT_BASE_DIR"
 command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 [ -d ".venv" ] || uv venv

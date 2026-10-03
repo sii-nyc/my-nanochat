@@ -3,7 +3,6 @@
 import argparse
 import base64
 import json
-import os
 import pickle
 import re
 import tempfile
@@ -11,6 +10,7 @@ from pathlib import Path
 
 import tiktoken
 
+from nanochat.paths import get_base_dir
 from nanochat.tokenizer import get_tokenizer_paths
 
 
@@ -114,10 +114,10 @@ def write_html(path, html):
 
 
 def main(argv=None):
-    base_dir = Path(os.environ.get("NANOCHAT_BASE_DIR") or "~/.cache/nanochat").expanduser()
+    base_dir = Path(get_base_dir())
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tokenizer-file", help="Export one filename (.pkl optional); default: all top-level .pkl files. GPT-2 and GPT-4 are always included.")
-    parser.add_argument("--output", type=Path, default=base_dir / "tokenizer.html", help="Output HTML path (.html optional). Default: NANOCHAT_BASE_DIR/tokenizer.html; parent directories are created.")
+    parser.add_argument("--output", type=Path, default=base_dir / "tokenizer.html", help="Output HTML path (.html optional). Default: <base_dir>/tokenizer.html; parent directories are created.")
     args = parser.parse_args(argv)
     path = args.output.expanduser()
     if not path.name or path.name == ".." or path.is_dir():

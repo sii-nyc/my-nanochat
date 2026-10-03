@@ -2,7 +2,7 @@
 Train the tokenizer comparison from scratch, evaluate it, and publish reports.
 
 Run from a clean Git checkout with the project environment installed:
-    python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
+    uv run python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
 
 The five tokenizer files and the offline HTML stay under the ignored training/
 directory. By default, small reports are committed and pushed to the current

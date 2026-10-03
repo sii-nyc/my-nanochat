@@ -6,8 +6,9 @@
 # Default series name is today's date (e.g., jan11)
 
 export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
-mkdir -p $NANOCHAT_BASE_DIR
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$REPO_ROOT/training}"
+mkdir -p "$NANOCHAT_BASE_DIR"
 
 # Setup (skip with SKIP_SETUP=1)
 if [ -z "$SKIP_SETUP" ]; then

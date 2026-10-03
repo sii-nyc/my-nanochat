@@ -14,12 +14,12 @@ nanochat 使用 byte-level BPE（Byte Pair Encoding）将文本转换为模型�
 ## 训练阶段
 
 ```bash
-NANOCHAT_BASE_DIR=training uv run python -m scripts.tok_train --max-chars=2000000000 --vocab-size=32768 --doc-cap=10000 --tokenizer-file=tokenizer.pkl
+uv run python -m scripts.tok_train --max-chars=2000000000 --vocab-size=32768 --doc-cap=10000 --tokenizer-file=tokenizer.pkl
 ```
 
 参数说明：
 
-- **NANOCHAT_BASE_DIR=training**：数据与运行产物的根目录，是环境变量而非训练脚本参数。脚本从 training/base_data_climbmix/ 读取数据，并将结果保存到 training/tokenizer/；若不设置，默认使用 ~/.cache/nanochat/。
+- **数据目录**：默认使用仓库根目录下的 `training/`，从 `training/base_data_climbmix/` 读取数据，并将结果保存到 `training/tokenizer/`。需要改变位置时可设置 `NANOCHAT_BASE_DIR` 环境变量。
 - **--max-chars=2000000000**：训练文本的字符预算，按每篇截断后的 Python 字符数累计，不是 UTF-8 字节数。累计数超过预算后才停止，因此可能多读一篇文档；如果数据不足，脚本不会自动下载补齐。
 - **--vocab-size=32768**：最终词表大小，包含普通 token 和特殊 token。
 - **--doc-cap=10000**：每篇文档最多保留 10000 个字符，避免少数超长文档占据过多训练预算。
@@ -40,9 +40,6 @@ NANOCHAT_BASE_DIR=training uv run python -m scripts.tok_train --max-chars=200000
 模型使用分词器时，nanochat 从已保存的文件加载 tiktoken Encoding。下面是编码、解码和查看 token 原始字节的最小示例；运行前需要先训练并保存默认词表：
 
 ```python
-import os
-os.environ["NANOCHAT_BASE_DIR"] = "training"  # 与上面的训练命令使用同一目录
-
 from nanochat.tokenizer import get_tokenizer
 
 tokenizer = get_tokenizer(filename="tokenizer.pkl")  # 加载上面命令训练的词表

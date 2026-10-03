@@ -18,7 +18,7 @@
 - `docs/`：原理、实验和项目进展文档；从 `docs/index.md` 查找资料，需要回顾历史或接续实验时从 `docs/progress/README.md` 查找相关记录。
 - `dev/`：研究过程中的辅助脚本、分析和素材。
 
-依赖与运行方式分别以 `pyproject.toml` 和 `README.md` 为准。数据、分词器和检查点属于运行产物，存储位置可通过 `NANOCHAT_BASE_DIR` 配置。
+依赖与运行方式分别以 `pyproject.toml` 和 `README.md` 为准。数据、分词器和检查点属于运行产物，默认保存在仓库的 `training/`；可通过 `NANOCHAT_BASE_DIR` 改变位置。
 
 ## 开发与运行环境
 

@@ -10,10 +10,11 @@
 # 3) Example launch with wandb logging, but see below for setting up wandb first:
 # WANDB_RUN=speedrun screen -L -Logfile runs/speedrun.log -S speedrun bash runs/speedrun.sh
 
-# Default intermediate artifacts directory is in ~/.cache/nanochat
+# Default intermediate artifacts directory is this checkout's training/.
 export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
-mkdir -p $NANOCHAT_BASE_DIR
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export NANOCHAT_BASE_DIR="${NANOCHAT_BASE_DIR:-$REPO_ROOT/training}"
+mkdir -p "$NANOCHAT_BASE_DIR"
 
 # -----------------------------------------------------------------------------
 # Python venv setup with uv

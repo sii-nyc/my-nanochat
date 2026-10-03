@@ -37,6 +37,8 @@ uv sync --extra cpu    # (or) Use for CPU-only / MPS
 source .venv/bin/activate
 ```
 
+Generated datasets, tokenizers, and checkpoints are saved under this checkout's `training/` directory by default. Set `NANOCHAT_BASE_DIR` to use a different location.
+
 For development (adds pytest, matplotlib, ipykernel, transformers, etc.):
 
 ```bash
