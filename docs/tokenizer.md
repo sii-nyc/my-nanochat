@@ -14,7 +14,7 @@ nanochat 使用 byte-level BPE（Byte Pair Encoding）将文本转换为模型�
 ## 训练阶段
 
 ```bash
-NANOCHAT_BASE_DIR=training python -m scripts.tok_train --max-chars=2000000000 --vocab-size=32768 --doc-cap=10000 --tokenizer-file=tokenizer.pkl
+NANOCHAT_BASE_DIR=training uv run python -m scripts.tok_train --max-chars=2000000000 --vocab-size=32768 --doc-cap=10000 --tokenizer-file=tokenizer.pkl
 ```
 
 参数说明：
@@ -90,7 +90,7 @@ get_tokenizer 的 filename 可写完整的 .pkl 文件名，也可省略后缀�
 实验入口为 `runs/tokenizer_experiment.py`，在服务器准备好 ClimbMix Parquet 数据后运行：
 
 ```bash
-python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
+uv run python runs/tokenizer_experiment.py --data-dir /path/to/base_data_climbmix
 ```
 
 脚本将词表、日志和离线网页保存在 Git 忽略的 `training/tokenizer_experiments/` 中；将 Markdown 报告、精确的字节数与 token 数及 BPT、运行配置写入 `docs/experiments/tokenizer/`，默认提交并推送到当前分支的上游。运行前需要干净的 Git 工作区和已配置的上游分支。
