@@ -1,0 +1,329 @@
+{
+  "metric": "BPT = UTF-8 bytes / ordinary tokens; no BOS or chat template",
+  "samples": {
+    "news": {
+      "utf8_bytes": 1819,
+      "sha256_utf8": "df8d44c45ae28b96302280c2092f92bcd9e4cc5b699e82390333b3678bc505a5",
+      "documents": null,
+      "row_group": null
+    },
+    "korean": {
+      "utf8_bytes": 893,
+      "sha256_utf8": "ee5fd723e6323d0a9af454fd116befe7378909e5d3158d4de1f3495664b7d612",
+      "documents": null,
+      "row_group": null
+    },
+    "code": {
+      "utf8_bytes": 1259,
+      "sha256_utf8": "2891d97dbeae5208c35ac3b740860294d7d2d6ab4309e18eb1c349ed32cbe7ee",
+      "documents": null,
+      "row_group": null
+    },
+    "math": {
+      "utf8_bytes": 1834,
+      "sha256_utf8": "a9a6008856117ce1bbb6cea2be3a77b49d63b2afe76185175a58a372625d840b",
+      "documents": null,
+      "row_group": null
+    },
+    "science": {
+      "utf8_bytes": 1112,
+      "sha256_utf8": "c9e615d4cf6f317a1101cdd0ffc7a1c054e125e18fa087ed1070f04c2bd5d570",
+      "documents": null,
+      "row_group": null
+    },
+    "climbmix-train": {
+      "utf8_bytes": 2948778,
+      "sha256_utf8": "2b9636f6d781357cabe28e0971fe6fd1fe1b060c6cfd581857a83cca36882ded",
+      "documents": 1024,
+      "row_group": 0
+    },
+    "climbmix-val": {
+      "utf8_bytes": 3024593,
+      "sha256_utf8": "311160f8996a0f077414c52d45651042981bb430b3e01604f68ae5af6f1c11d8",
+      "documents": 1024,
+      "row_group": 0
+    }
+  },
+  "tokenizers": {
+    "GPT-2": {
+      "vocab_size": 50257,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 404,
+          "bpt": 4.502475247524752
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 745,
+          "bpt": 1.1986577181208053
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 576,
+          "bpt": 2.185763888888889
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 936,
+          "bpt": 1.9594017094017093
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 260,
+          "bpt": 4.276923076923077
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 631304,
+          "bpt": 4.670931912359181
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 653067,
+          "bpt": 4.631367072597452
+        }
+      }
+    },
+    "GPT-4": {
+      "vocab_size": 100277,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 387,
+          "bpt": 4.700258397932816
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 364,
+          "bpt": 2.4532967032967035
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 309,
+          "bpt": 4.074433656957929
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 832,
+          "bpt": 2.204326923076923
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 249,
+          "bpt": 4.465863453815261
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 611619,
+          "bpt": 4.82126618041624
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 631183,
+          "bpt": 4.791943065640234
+        }
+      }
+    },
+    "tok_1b_chars.pkl": {
+      "vocab_size": 32768,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 405,
+          "bpt": 4.491358024691358
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 769,
+          "bpt": 1.1612483745123536
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 399,
+          "bpt": 3.155388471177945
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 912,
+          "bpt": 2.0109649122807016
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 242,
+          "bpt": 4.595041322314049
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 622392,
+          "bpt": 4.737814753403
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 645016,
+          "bpt": 4.689175152244285
+        }
+      }
+    },
+    "tok_2b_chars.pkl": {
+      "vocab_size": 32768,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 405,
+          "bpt": 4.491358024691358
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 749,
+          "bpt": 1.1922563417890522
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 397,
+          "bpt": 3.1712846347607053
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 911,
+          "bpt": 2.013172338090011
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 247,
+          "bpt": 4.502024291497976
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 622480,
+          "bpt": 4.737144968513045
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 644914,
+          "bpt": 4.689916795107565
+        }
+      }
+    },
+    "tok_2b_vocab16k.pkl": {
+      "vocab_size": 16384,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 432,
+          "bpt": 4.210648148148148
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 848,
+          "bpt": 1.053066037735849
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 448,
+          "bpt": 2.810267857142857
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 1020,
+          "bpt": 1.7980392156862746
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 276,
+          "bpt": 4.028985507246377
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 663532,
+          "bpt": 4.44406298415148
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 688246,
+          "bpt": 4.394639416720184
+        }
+      }
+    },
+    "tok_2b_vocab64k.pkl": {
+      "vocab_size": 65536,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 383,
+          "bpt": 4.749347258485639
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 602,
+          "bpt": 1.4833887043189369
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 368,
+          "bpt": 3.421195652173913
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 853,
+          "bpt": 2.1500586166471276
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 216,
+          "bpt": 5.148148148148148
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 599165,
+          "bpt": 4.921479058356212
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 619914,
+          "bpt": 4.879052578260856
+        }
+      }
+    },
+    "tok_3b_chars.pkl": {
+      "vocab_size": 32768,
+      "samples": {
+        "news": {
+          "bytes": 1819,
+          "tokens": 405,
+          "bpt": 4.491358024691358
+        },
+        "korean": {
+          "bytes": 893,
+          "tokens": 769,
+          "bpt": 1.1612483745123536
+        },
+        "code": {
+          "bytes": 1259,
+          "tokens": 397,
+          "bpt": 3.1712846347607053
+        },
+        "math": {
+          "bytes": 1834,
+          "tokens": 911,
+          "bpt": 2.013172338090011
+        },
+        "science": {
+          "bytes": 1112,
+          "tokens": 246,
+          "bpt": 4.520325203252033
+        },
+        "climbmix-train": {
+          "bytes": 2948778,
+          "tokens": 622574,
+          "bpt": 4.736429725622978
+        },
+        "climbmix-val": {
+          "bytes": 3024593,
+          "tokens": 644895,
+          "bpt": 4.690054970188945
+        }
+      }
+    }
+  }
+}
