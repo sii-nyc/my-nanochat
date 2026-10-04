@@ -3,6 +3,8 @@
 ![nanochat logo](dev/nanochat.png)
 ![scaling laws](dev/scaling_laws_jan26.png)
 
+> 本仓库是 nanochat 的个人 fork，用于持续学习、复现和扩展 LLM 与 Agent 系统。项目资料从 [docs/index.md](docs/index.md) 查找，当前阶段与已完成的里程碑见 [docs/progress/README.md](docs/progress/README.md)。下方英文介绍、排行榜和成本数据沿用上游 nanochat 的内容。
+
 nanochat is the simplest experimental harness for training LLMs. It is designed to run on a single GPU node, the code is minimal/hackable, and it covers all major LLM stages including tokenization, pretraining, finetuning, evaluation, and inference. For example, you can train your own GPT-2 capability LLM (which cost ~$43,000 to train in 2019) for only $48 (~2 hours of 8XH100 GPU node) and then talk to it over a simple CLI. On a spot instance, the total cost can be closer to ~$15. More generally, nanochat is configured out of the box to train an entire miniseries of compute-optimal models by setting one single complexity dial: `--depth`, the number of layers in the GPT transformer model (GPT-2 capability happens to be approximately depth 26). All other hyperparameters (the width of the transformer, number of heads, learning rate adjustments, training horizons, weight decays, ...) are calculated automatically in an optimal way.
 
 For questions about the repo, I recommend either using [DeepWiki](https://deepwiki.com/karpathy/nanochat) from Devin/Cognition to ask questions about the repo, or use the [Discussions tab](https://github.com/karpathy/nanochat/discussions), or come by the [#nanochat](https://discord.com/channels/1020383067459821711/1427295580895314031) channel on Discord.
@@ -34,8 +36,9 @@ nanochat uses [uv](https://docs.astral.sh/uv/) for dependency management. To ins
 ```bash
 uv sync --extra gpu    # Use for CUDA (A100/H100/etc.)
 uv sync --extra cpu    # (or) Use for CPU-only / MPS
-source .venv/bin/activate
 ```
+
+本仓库在服务器上通过 `uv run` 执行 Python 命令，无需手动激活虚拟环境。
 
 Generated datasets, tokenizers, and checkpoints are saved under this checkout's `training/` directory by default. Set `NANOCHAT_BASE_DIR` to use a different location.
 
@@ -53,10 +56,10 @@ The most fun you can have is to train your own GPT-2 and talk to it. The entire 
 bash runs/speedrun.sh
 ```
 
-You may wish to do so in a screen session as this will take ~1.5 hours to run. Once it's done, you can talk to your model over the CLI. Make sure again that your local uv virtual environment is active (run `source .venv/bin/activate`), and chat:
+You may wish to do so in a screen session as this will take ~1.5 hours to run. Once it's done, you can talk to your model over the CLI:
 
 ```bash
-python -m scripts.chat_cli
+uv run python -m scripts.chat_cli
 ```
 
 Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :). An example conversation with a speedrun model:
@@ -90,7 +93,7 @@ A few more notes:
 If you are a researcher and wish to help improve nanochat, two scripts of interest are [runs/scaling_laws.sh](runs/scaling_laws.sh) and [runs/miniseries.sh](runs/miniseries.sh). See [Jan 7 miniseries v1](https://github.com/karpathy/nanochat/discussions/420) for related documentation. For quick experimentation (~5 min pretraining runs) my favorite scale is to train a 12-layer model (GPT-1 sized), e.g. like this:
 
 ```
-OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+OMP_NUM_THREADS=1 uv run torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
     --depth=12 \
     --run="d12" \
     --model-tag="d12" \
@@ -126,8 +129,8 @@ nanochat does not use `torch.amp.autocast`. Instead, precision is managed explic
 You can override the default with the `NANOCHAT_DTYPE` environment variable:
 
 ```bash
-NANOCHAT_DTYPE=float32 python -m scripts.chat_cli -p "hello"   # force fp32
-NANOCHAT_DTYPE=bfloat16 torchrun --nproc_per_node=8 -m scripts.base_train  # force bf16
+NANOCHAT_DTYPE=float32 uv run python -m scripts.chat_cli -p "hello"   # force fp32
+NANOCHAT_DTYPE=bfloat16 uv run torchrun --nproc_per_node=8 -m scripts.base_train  # force bf16
 ```
 
 How it works: model weights are stored in fp32 (for optimizer precision), but our custom `Linear` layer casts them to `COMPUTE_DTYPE` during the forward pass. Embeddings are stored directly in `COMPUTE_DTYPE` to save memory. This gives us the same mixed-precision benefit as autocast but with full explicit control over what runs in which precision.

@@ -17,7 +17,7 @@ repackage_data_reference.py
 karpathy/climbmix-400b-shuffle (shard_[00000-06542].parquet)
     ↓
 dataset.py
-    ├─ 命令行使用：下载数据到本地 python -m nanochat.dataset -n -1 -w 4 (n 表示下载几个 shard，w 是 worker 数量)
+    ├─ 命令行使用：下载数据到本地 uv run python -m nanochat.dataset -n -1 -w 4 (n 表示下载几个 shard，w 是 worker 数量)
     └─ import 使用: parquets_iter_batched(split, start=0, step=1) 返回一个生成器，每次 yield 一个 row group list[str]，start 和 step 参数用于 DDP (start=rank, step=world_size).
 
 # Tokenizer
@@ -28,12 +28,14 @@ dataset.py
 
 ## 训练
 
-python -m scripts.tok_train --max-chars=xxx --vocab-size xxx --doc-cap xxx
+uv run python -m scripts.tok_train --max-chars=xxx --vocab-size=xxx --doc-cap=xxx --tokenizer-file=xxx
 
 1. 准备训练数据，这里使用 pretraining data， 并通过 max-chars 控制训练语料字符数；vocab-size 控制最终词表大小；doc-cap 控制每篇文档最多截取多少字符（防止少量超长文档 dominate）
 2. 每篇文档先经过 SPLIT_PATTERN 正则预切分
 3. 将所有文档转换为 UTF-8 bytes 序列，Byte-level BPE 的基础词表固定包含 256 个 token (对应 byte 0-255)
 4. 不断统计相邻 token pair 频率，并合并最高频 pair 为一个新的 token (e.g., [23, 45] -> 256)
-5. 直到词表达到目标大小（即进行 vocab-size - 256 次合并）
+5. 直到普通 token 达到目标数量，再加入特殊 token；当前代码定义 9 个特殊 token，若 `vocab-size` 指最终词表大小，则合并次数为 `vocab-size - 9 - 256`。完整说明见 [tokenizer.md](tokenizer.md)。
 
 ## 推理
+
+编码、解码和加载指定词表的示例见 [tokenizer.md](tokenizer.md#推理阶段)。
