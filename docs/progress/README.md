@@ -2,16 +2,15 @@
 
 本页只保存当前状态和里程碑入口。详细原理与实验数据放在专题文档中；需要了解历史或接续实验时，阅读本页及与任务相关的记录。
 
-## 当前状态（2026-10-04）
+## 当前状态（2026-10-01）
 
 - **阶段**：理解并复现 nanochat，目标是训练自己的基础聊天模型。
-- **已有进展**：已理解 BPE 算法和 tokenizer 训练流程。运行标识为 `tokenizer-20261003` 的五组 tokenizer 对比实验已从头完成；实验观察见[新运行记录](nanochat/2026-10-04-tokenizer-experiment.md)，原理与完整分析见[专题文档](../tokenizer.md)。此前的工作见[历史里程碑](nanochat/2026-10-01-tokenizer.md)与[旧实验记录](../experiments/tokenizer/2026-09-initial.md)。新运行的原始报告目前仅在服务器。
+- **已有进展**：已理解 BPE 算法和 tokenizer 训练流程，并比较了不同训练字符数与词表大小的分词表现；实验设计与结论见[分词器里程碑](nanochat/2026-10-01-tokenizer.md)，旧实验数据见[历史记录](../experiments/tokenizer/2026-09-initial.md)。
 - **尚未记录**：本仓库中暂无预训练、SFT 和端到端对话模型复现的运行记录或结果索引。这只表示进展记录尚不完整，不能据此判断服务器上是否做过相关实验。
 
 ## 里程碑
 
 - [2026-10-01 · Tokenizer：BPE 原理与对比实验（历史回填）](nanochat/2026-10-01-tokenizer.md)
-- [2026-10-04 · Tokenizer：从头训练对比实验](nanochat/2026-10-04-tokenizer-experiment.md)
 
 ## 记录方式
 
