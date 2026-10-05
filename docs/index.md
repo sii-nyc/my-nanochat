@@ -5,6 +5,7 @@ docs/
 ├── index.md                              # 本目录的文档索引
 ├── reading_notes.md                      # 阅读和理解项目代码时持续整理的个人笔记
 ├── tokenizer.md                          # 分词器原理、使用及对比实验的持续整理
+├── model_architecture.md                 # 当前模型的数据流、组件和预训练配置来源
 ├── experiments/                          # 各次实验的设置、报告与分析
 │   └── tokenizer/                       # 分词器实验的设置、原始报告与分析
 │       └── tokenizer-20261003/           # 本次从头训练与评估的可追溯报告
@@ -16,7 +17,8 @@ docs/
 └── progress/                             # 按阶段组织的项目进展记录
     ├── README.md                         # 当前状态与里程碑索引
     └── nanochat/                         # 理解和复现 nanochat 阶段的记录
-        └── 2026-10-01-tokenizer.md       # 分词器原理与正式复现实验的阶段总结
+        ├── 2026-10-01-tokenizer.md       # 分词器原理与正式复现实验的阶段总结
+        └── 2026-10-05-model-architecture.md # 模型架构整体理解的阶段总结
 ```
 
 新增或移动 `docs/` 下的文档时，同步更新本索引。
